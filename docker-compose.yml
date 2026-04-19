@@ -15,7 +15,7 @@ services:
     environment:
       TZ: ${TZ}
       WEBPASSWORD: ${PIHOLE_PASSWORD}
-      DNSMASQ_LISTENING: all
+      FTLCONF_dns_listeningMode: all
     volumes:
       - ./pihole/etc-pihole:/etc/pihole
       - ./pihole/etc-dnsmasq.d:/etc/dnsmasq.d
