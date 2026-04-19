@@ -1,0 +1,23 @@
+# Secrets
+.env
+
+# Runtime data (not config)
+*.log
+*.db
+*.sqlite
+
+# SSL certificates
+letsencrypt/
+
+# Pi-hole runtime (but keep custom.list and adlists)
+pihole/etc-pihole/
+pihole/etc-dnsmasq.d/
+
+# NPM runtime
+nginx-proxy-manager/data/
+nginx-proxy-manager/letsencrypt/
+
+# Backups (too large for git)
+*.bak
+*.tar.gz
+

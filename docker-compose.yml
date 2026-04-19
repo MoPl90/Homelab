@@ -1,0 +1,147 @@
+services:
+  # ===================
+  # Pi-hole - DNS & Ad Blocking
+  # ===================
+  pihole:
+    image: pihole/pihole:latest
+    container_name: pihole
+    hostname: pihole
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8080:80/tcp"
+      - "8443:443/tcp"  # Web UI HTTPS
+    environment:
+      TZ: ${TZ}
+      WEBPASSWORD: ${PIHOLE_PASSWORD}
+      DNSMASQ_LISTENING: all
+    volumes:
+      - ./pihole/etc-pihole:/etc/pihole
+      - ./pihole/etc-dnsmasq.d:/etc/dnsmasq.d
+      - ./pihole/custom.list:/etc/pihole/hosts/custom-local.list:ro
+    networks:
+      - homelab
+
+  # ===================
+  # Nginx Proxy Manager - Reverse Proxy
+  # ===================
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: nginx-proxy-manager
+    restart: unless-stopped
+    ports:
+      - "80:80"    # HTTP
+      - "443:443"  # HTTPS
+      - "81:81"    # Admin UI
+    volumes:
+      - ./nginx-proxy-manager/data:/data
+      - ./nginx-proxy-manager/letsencrypt:/etc/letsencrypt
+    networks:
+      - homelab
+
+  # ===================
+  # Portainer - Docker Management
+  # ===================
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9443:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /etc/localtime:/etc/localtime:ro
+      - portainer_data:/data
+    networks:
+      - homelab
+
+  # ===================
+  # Paperless-ngx - Document Management
+  # ===================
+  paperless-redis:
+    image: redis:7
+    container_name: paperless-redis
+    restart: unless-stopped
+    volumes:
+      - paperless_redisdata:/data
+    networks:
+      - homelab
+
+  paperless-db:
+    image: postgres:15
+    container_name: paperless-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: ${PAPERLESS_DB_PASSWORD}
+    volumes:
+      - paperless_pgdata:/var/lib/postgresql/data
+    networks:
+      - homelab
+
+  paperless:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless
+    restart: unless-stopped
+    depends_on:
+      - paperless-db
+      - paperless-redis
+    ports:
+      - "8010:8000"
+    environment:
+      PAPERLESS_REDIS: redis://paperless-redis:6379
+      PAPERLESS_DBHOST: paperless-db
+      PAPERLESS_DBPASS: ${PAPERLESS_DB_PASSWORD}
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      USERMAP_UID: 1001
+      USERMAP_GID: 1001
+      PAPERLESS_TIME_ZONE: ${TZ}
+      PAPERLESS_OCR_LANGUAGE: deu+eng
+      PAPERLESS_CONSUMER_POLLING: 30
+    volumes:
+      - paperless_data:/usr/src/paperless/data
+      - paperless_media:/usr/src/paperless/media
+      - /mnt/hdd/storage/paperless/consume:/usr/src/paperless/consume
+      - /mnt/hdd/storage/paperless/export:/usr/src/paperless/export
+    networks:
+      - homelab
+
+  # ===================
+  # Watchtower - Auto Updates
+  # ===================
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: 86400  # Check daily
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    driver: bridge
+
+volumes:
+  portainer_data:
+    external: true
+    name: portainer_portainer_data
+  paperless_data:
+    external: true
+    name: paperless_data
+  paperless_media:
+    external: true
+    name: paperless_media
+  paperless_pgdata:
+    external: true
+    name: paperless_pgdata
+  paperless_redisdata:
+    external: true
+    name: paperless_redisdata
