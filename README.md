@@ -158,7 +158,75 @@ sudo hdparm -C /dev/sdX
 sudo hdparm -y /dev/sdX
 ```
 
-Configuration is set via udev rule in `/etc/udev/rules.d/69-hdparm.rules`.
+Configuration is set via udev rule in `/etc/udev/rules.d/69-hdparm.rules`:
+
+```
+ACTION=="add", SUBSYSTEM=="block", ENV{ID_SERIAL_SHORT}=="NAAXDNHD", RUN+="/usr/sbin/hdparm -S 241 /dev/%k"
+```
+
+## Samba & Time Machine
+
+### Shares
+
+| Share | Path | User | Purpose |
+|-------|------|------|---------|
+| timemachine | /mnt/hdd/timemachine | backup | macOS Time Machine backups |
+| storage | /mnt/hdd/storage | backup | General file storage |
+
+### Configuration
+
+Samba config is in `/etc/samba/smb.conf`:
+
+```ini
+[timemachine]
+   comment = Time Machine Backup
+   path = /mnt/hdd/timemachine
+   browseable = yes
+   writeable = yes
+   create mask = 0600
+   directory mask = 0700
+   valid users = backup
+   fruit:aapl = yes
+   fruit:time machine = yes
+   vfs objects = catia fruit streams_xattr
+
+[storage]
+   comment = General Storage
+   path = /mnt/hdd/storage
+   browseable = yes
+   writeable = yes
+   create mask = 0664
+   directory mask = 0775
+   valid users = backup
+```
+
+### Avahi (Bonjour Discovery)
+
+Time Machine auto-discovery is configured in `/etc/avahi/services/timemachine.service`.
+
+### Setup Commands
+
+```bash
+# Create backup user
+sudo useradd -M -s /usr/sbin/nologin backup
+sudo smbpasswd -a backup
+
+# Set ownership
+sudo chown -R backup:backup /mnt/hdd/timemachine
+
+# Test config
+testparm -s
+
+# Restart services
+sudo systemctl restart smbd
+sudo systemctl restart avahi-daemon
+```
+
+### Mac Setup
+
+1. **System Settings → Time Machine → Add Backup Disk**
+2. Select "robertson-walker Time Machine"
+3. Login with user: `backup` and your Samba password
 
 ## Troubleshooting
 
@@ -183,6 +251,45 @@ sudo docker exec -it paperless-db psql -U paperless -d paperless -c "ALTER USER 
 sudo docker restart paperless
 ```
 
+## Samba & Time Machine
+
+### Shares
+
+| Share | Path | User | Purpose |
+|-------|------|------|---------|
+| timemachine | /mnt/hdd/timemachine | backup | macOS Time Machine backups |
+| storage | /mnt/hdd/storage | backup | General file storage |
+
+### Configuration Files
+
+- Samba: `/etc/samba/smb.conf`
+- Avahi (Time Machine discovery): `/etc/avahi/services/timemachine.service`
+
+### Connecting from Mac
+
+**Time Machine:**
+1. System Settings → Time Machine → Add Backup Disk
+2. Select "robertson-walker Time Machine"
+3. Login: `backup` / (password in password manager)
+
+**Storage:**
+1. Finder → Go → Connect to Server
+2. `smb://192.168.178.111/storage`
+3. Login: `backup` / (password in password manager)
+
+### Managing Samba
+
+```bash
+# Test config
+testparm -s
+
+# Restart Samba
+sudo systemctl restart smbd
+
+# Change password
+sudo smbpasswd backup
+```
+
 ## Recovery from Scratch
 
 1. Flash fresh Ubuntu Server to SD card
@@ -191,3 +298,5 @@ sudo docker restart paperless
 4. Mount disks (fstab entries above)
 5. `cd ~/homelab && sudo docker compose up -d`
 6. Restore Docker volumes from backup if needed
+7. Reconfigure Samba (see smb.conf additions above)
+8. Reconfigure Avahi for Time Machine discovery
