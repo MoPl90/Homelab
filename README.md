@@ -48,6 +48,7 @@ NPM: sees "paperless" subdomain, proxies to paperless:8000
 | `.env` | Secrets (not in git) |
 | `.env.example` | Template for secrets |
 | `pihole/custom.list` | Local DNS entries |
+| `scripts/backup-volumes.sh` | Weekly Docker volume backup |
 
 ## Usage
 
@@ -136,10 +137,27 @@ Configure your router's DHCP to assign `192.168.178.111` as the DNS server.
 | pihole.robertson-walker.me | https | 192.168.178.111 | 8443 |
 | npm.robertson-walker.me | http | nginx-proxy-manager | 81 |
 
+### Automated Volume Backup
+
+A cron job runs every Sunday at 3 AM to back up Docker volumes:
+
+```bash
+# Cron entry (sudo crontab -l)
+0 3 * * 0 /home/friedmann/homelab/scripts/backup-volumes.sh
+```
+
+The script (`scripts/backup-volumes.sh`):
+- Backs up all Docker volumes to `/mnt/hdd/storage/backups/docker-volumes-YYYYMMDD/`
+- Keeps only the last 4 backups (4 weeks)
+- Logs to `/var/log/docker-backup.log`
+
 ### Manual volume backup
 
 ```bash
-# Stop containers, backup, restart
+# Run backup manually
+sudo ~/homelab/scripts/backup-volumes.sh
+
+# Or stop containers for consistent backup
 cd ~/homelab
 sudo docker compose stop
 sudo rsync -av /var/lib/docker/volumes/ /mnt/hdd/storage/backups/docker-volumes-$(date +%Y%m%d)/
@@ -251,45 +269,6 @@ sudo docker exec -it paperless-db psql -U paperless -d paperless -c "ALTER USER 
 sudo docker restart paperless
 ```
 
-## Samba & Time Machine
-
-### Shares
-
-| Share | Path | User | Purpose |
-|-------|------|------|---------|
-| timemachine | /mnt/hdd/timemachine | backup | macOS Time Machine backups |
-| storage | /mnt/hdd/storage | backup | General file storage |
-
-### Configuration Files
-
-- Samba: `/etc/samba/smb.conf`
-- Avahi (Time Machine discovery): `/etc/avahi/services/timemachine.service`
-
-### Connecting from Mac
-
-**Time Machine:**
-1. System Settings → Time Machine → Add Backup Disk
-2. Select "robertson-walker Time Machine"
-3. Login: `backup` / (password in password manager)
-
-**Storage:**
-1. Finder → Go → Connect to Server
-2. `smb://192.168.178.111/storage`
-3. Login: `backup` / (password in password manager)
-
-### Managing Samba
-
-```bash
-# Test config
-testparm -s
-
-# Restart Samba
-sudo systemctl restart smbd
-
-# Change password
-sudo smbpasswd backup
-```
-
 ## Recovery from Scratch
 
 1. Flash fresh Ubuntu Server to SD card
@@ -300,3 +279,4 @@ sudo smbpasswd backup
 6. Restore Docker volumes from backup if needed
 7. Reconfigure Samba (see smb.conf additions above)
 8. Reconfigure Avahi for Time Machine discovery
+9. Set up cron job: `sudo crontab -e` and add backup line
